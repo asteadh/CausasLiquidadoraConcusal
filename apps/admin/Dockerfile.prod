@@ -22,11 +22,18 @@ COPY --from=builder /app/out/full/ .
 ARG ADMIN_PUBLIC_URL=https://admin.example.com
 ENV BETTER_AUTH_URL=$ADMIN_PUBLIC_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_API_URL is only read by apps/admin/src/lib/api-client.ts, a
+# server-only helper (see its own comment) — so despite the NEXT_PUBLIC_
+# prefix it should point at the in-cluster api Service, not a public
+# hostname. Next.js still inlines NEXT_PUBLIC_* at build time regardless of
+# client/server usage, so it must be supplied here, not as a Deployment env
+# var (which would be a runtime no-op).
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 # Build through Turbo so @workspace/db is compiled before Next resolves its
 # package exports.
 RUN DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder \
     BETTER_AUTH_SECRET=build-placeholder-secret-with-more-than-32-characters \
-    NEXT_PUBLIC_API_URL=http://localhost:4000 \
+    NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     pnpm turbo build --filter=admin
 
 FROM node:22-bookworm-slim AS runner

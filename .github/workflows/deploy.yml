@@ -1,0 +1,283 @@
+name: 🚢 Deploy to Kubernetes
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: causas-kubernetes-deploy
+  cancel-in-progress: false
+
+env:
+  NAMESPACE: causas
+
+jobs:
+  build-images:
+    name: 🐳 Build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: API
+            dockerfile: apps/api/Dockerfile.prod
+            image: causas-api
+            cache: api
+          - name: Admin
+            dockerfile: apps/admin/Dockerfile.prod
+            image: causas-admin
+            cache: admin
+            build-args: |
+              ADMIN_PUBLIC_URL=https://causas.liquidadoraconcusal.cl
+              NEXT_PUBLIC_API_URL=http://api.causas.svc.cluster.local:4000
+          - name: Migrator
+            dockerfile: packages/db/Dockerfile.migrate
+            image: causas-migrator
+            cache: migrator
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: 📦 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔑 Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🛠️ Build & Push ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          platforms: linux/amd64
+          build-args: ${{ matrix.build-args || '' }}
+          tags: |
+            ghcr.io/asteadh/${{ matrix.image }}:latest
+            ghcr.io/asteadh/${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.cache }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.cache }}
+
+      - name: 🔬 Scan ${{ matrix.name }} image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ghcr.io/asteadh/${{ matrix.image }}:${{ github.sha }}
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  deploy:
+    name: 🚀 Deploy (Prod)
+    runs-on: ubuntu-latest
+    needs: [build-images]
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: 📦 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🧭 Prepare Derived Deployment Env
+        run: |
+          ENV_FILE="infra/k8s/envs/production.env"
+          read_env_value() {
+            awk -F= -v key="$1" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$ENV_FILE"
+          }
+          url_encode() {
+            python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+          }
+
+          POSTGRES_USER="$(read_env_value POSTGRES_USER)"
+          POSTGRES_DB="$(read_env_value POSTGRES_DB)"
+          ADMIN_HOSTNAME="$(read_env_value CLOUDFLARE_ADMIN_HOSTNAME)"
+
+          ENCODED_POSTGRES_PASSWORD="$(url_encode "${{ secrets.POSTGRES_PASSWORD }}")"
+          DATABASE_URL="postgresql://${POSTGRES_USER}:${ENCODED_POSTGRES_PASSWORD}@postgres-rw.${{ env.NAMESPACE }}.svc.cluster.local:5432/${POSTGRES_DB}"
+          BETTER_AUTH_URL="https://${ADMIN_HOSTNAME}"
+
+          echo "::add-mask::$DATABASE_URL"
+          echo "POSTGRES_USER=$POSTGRES_USER" >> "$GITHUB_ENV"
+          echo "POSTGRES_DB=$POSTGRES_DB" >> "$GITHUB_ENV"
+          echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+          echo "BETTER_AUTH_URL=$BETTER_AUTH_URL" >> "$GITHUB_ENV"
+
+      - name: 🔎 Pre-Flight Secret Check
+        run: |
+          echo "::group::Verifying Active Secrets"
+          MISSING_REQUIRED=0
+          must_exist() {
+            if [ -z "$2" ]; then echo "❌ REQUIRED MISSING: $1"; MISSING_REQUIRED=1; else echo "✅ REQUIRED FOUND: $1"; fi
+          }
+
+          must_exist "POSTGRES_PASSWORD" "${{ secrets.POSTGRES_PASSWORD }}"
+          must_exist "BETTER_AUTH_SECRET" "${{ secrets.BETTER_AUTH_SECRET }}"
+          must_exist "NEXULEX_DEVELOPER_API_KEY" "${{ secrets.NEXULEX_DEVELOPER_API_KEY }}"
+          must_exist "GHCR_PULL_USERNAME" "${{ secrets.GHCR_PULL_USERNAME }}"
+          must_exist "GHCR_PULL_TOKEN" "${{ secrets.GHCR_PULL_TOKEN }}"
+          must_exist "KUBECONFIG_RAW" "${{ secrets.KUBECONFIG_RAW }}"
+          must_exist "TAILSCALE_OAUTH_CLIENT_ID" "${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}"
+          must_exist "TAILSCALE_OAUTH_SECRET" "${{ secrets.TAILSCALE_OAUTH_SECRET }}"
+          must_exist "CLOUDFLARE_TUNNEL_TOKEN" "${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}"
+          must_exist "CLOUDFLARE_ACCOUNT_ID" "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+          must_exist "CLOUDFLARE_ZONE_ID" "${{ secrets.CLOUDFLARE_ZONE_ID }}"
+          must_exist "CLOUDFLARE_TUNNEL_ID" "${{ secrets.CLOUDFLARE_TUNNEL_ID }}"
+          must_exist "CLOUDFLARE_TUNNEL_API_TOKEN" "${{ secrets.CLOUDFLARE_TUNNEL_API_TOKEN }}"
+
+          if [ $MISSING_REQUIRED -eq 1 ]; then exit 1; fi
+          echo "::endgroup::"
+
+      - name: 🔗 Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: 📥 Install Kubectl
+        run: |
+          curl -sSLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+      - name: 🔐 Configure Kubeconfig
+        env:
+          KUBECONFIG_RAW: ${{ secrets.KUBECONFIG_RAW }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_RAW" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: 🛰️ Wait for Cluster API Reachability
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if kubectl cluster-info >/dev/null 2>&1; then
+              echo "Cluster API reachable."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Cluster API unreachable from the runner after ~1m. Check Tailscale ACLs and KUBECONFIG_RAW."
+          exit 1
+
+      - name: 🛠️ Ensure Namespace Exists
+        run: |
+          kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: 🔐 Create GHCR Pull Secret
+        run: |
+          kubectl create secret docker-registry ghcr-pull \
+            --namespace ${{ env.NAMESPACE }} \
+            --docker-server=ghcr.io \
+            --docker-username=${{ secrets.GHCR_PULL_USERNAME }} \
+            --docker-password=${{ secrets.GHCR_PULL_TOKEN }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: 💉 Inject Secrets (causas-secrets)
+        run: |
+          kubectl delete secret causas-secrets --namespace ${{ env.NAMESPACE }} --ignore-not-found
+          kubectl create secret generic causas-secrets \
+            --namespace ${{ env.NAMESPACE }} \
+            --from-literal=username="${POSTGRES_USER}" \
+            --from-literal=password="${{ secrets.POSTGRES_PASSWORD }}" \
+            --from-literal=DATABASE_URL="${DATABASE_URL}" \
+            --from-literal=NEXULEX_API_BASE_URL="https://api.nexulex.com" \
+            --from-literal=NEXULEX_DEVELOPER_API_KEY="${{ secrets.NEXULEX_DEVELOPER_API_KEY }}" \
+            --from-literal=BETTER_AUTH_SECRET="${{ secrets.BETTER_AUTH_SECRET }}" \
+            --from-literal=BETTER_AUTH_URL="${BETTER_AUTH_URL}" \
+            --from-literal=CLOUDFLARE_TUNNEL_TOKEN="${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}"
+
+      - name: 🏗️ Deploy Infrastructure (kustomize apply)
+        run: |
+          kubectl apply -k infra/k8s --namespace ${{ env.NAMESPACE }}
+
+      - name: ⏳ Wait for CloudNativePG Primary
+        run: |
+          set -euo pipefail
+          kubectl wait --for=condition=Ready cluster/postgres -n ${{ env.NAMESPACE }} --timeout=5m
+
+      - name: 🧬 Run Prisma Migration
+        run: |
+          set -euo pipefail
+          JOB_NAME="prisma-migrate-${GITHUB_SHA::8}"
+          kubectl delete job "$JOB_NAME" -n ${{ env.NAMESPACE }} --ignore-not-found
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${JOB_NAME}
+            namespace: ${{ env.NAMESPACE }}
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 300
+            template:
+              spec:
+                restartPolicy: Never
+                imagePullSecrets:
+                  - name: ghcr-pull
+                containers:
+                  - name: migrate
+                    image: ghcr.io/asteadh/causas-migrator:${{ github.sha }}
+                    env:
+                      - name: DATABASE_URL
+                        valueFrom:
+                          secretKeyRef:
+                            name: causas-secrets
+                            key: DATABASE_URL
+          EOF
+          kubectl wait --for=condition=Complete "job/${JOB_NAME}" -n ${{ env.NAMESPACE }} --timeout=5m || {
+            echo "::error::Prisma migration Job ${JOB_NAME} did not complete."
+            kubectl logs "job/${JOB_NAME}" -n ${{ env.NAMESPACE }} --all-containers || true
+            exit 1
+          }
+
+      - name: 🔄 Restart Deployments (pick up new images)
+        run: |
+          kubectl rollout restart deployment/api deployment/admin -n ${{ env.NAMESPACE }}
+
+      - name: ⏳ Wait for Rollouts
+        run: |
+          set -euo pipefail
+          NS="${{ env.NAMESPACE }}"
+          kubectl rollout status deployment/api -n "$NS" --timeout=5m &
+          PID_API=$!
+          kubectl rollout status deployment/admin -n "$NS" --timeout=5m &
+          PID_ADMIN=$!
+          kubectl rollout status deployment/cloudflared -n "$NS" --timeout=5m &
+          PID_CLOUDFLARED=$!
+
+          FAIL=0
+          wait "$PID_API" || { echo "::error::API rollout failed"; FAIL=1; }
+          wait "$PID_ADMIN" || { echo "::error::Admin rollout failed"; FAIL=1; }
+          wait "$PID_CLOUDFLARED" || { echo "::error::Cloudflare Tunnel rollout failed"; FAIL=1; }
+          if [ "$FAIL" -eq 1 ]; then exit 1; fi
+
+      - name: ☁️ Reconcile Cloudflare Tunnel
+        env:
+          CLOUDFLARE_TUNNEL_API_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_TUNNEL_ID: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
+        run: scripts/deploy/configure-cloudflare-tunnel.sh "infra/k8s/envs/production.env"
+
+      - name: ✅ Health Check
+        run: |
+          set -euo pipefail
+          ADMIN_HOSTNAME="$(awk -F= '$1=="CLOUDFLARE_ADMIN_HOSTNAME"{sub(/^[^=]*=/,"");print;exit}' infra/k8s/envs/production.env)"
+          status="$(curl --silent --show-error --retry 5 --retry-all-errors --max-time 30 --output /dev/null --write-out '%{http_code}' "https://${ADMIN_HOSTNAME}/login")"
+          case "$status" in
+            200|301|302|303|307|308) ;;
+            *) echo "::error::Unexpected ${ADMIN_HOSTNAME}/login status: ${status}"; exit 1 ;;
+          esac

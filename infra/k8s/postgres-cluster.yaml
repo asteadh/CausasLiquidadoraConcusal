@@ -1,0 +1,33 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  namespace: causas
+spec:
+  # Single instance: this is a small internal admin panel, not the HA
+  # production database nexulex runs. No affinity/topology-spread blocks —
+  # those only matter once there's more than one instance to spread.
+  instances: 1
+  primaryUpdateStrategy: unsupervised
+  imageName: ghcr.io/cloudnative-pg/postgresql:18
+  postgresql:
+    parameters:
+      timezone: America/Santiago
+      log_timezone: America/Santiago
+  env:
+    - name: TZ
+      value: America/Santiago
+  bootstrap:
+    initdb:
+      database: causas
+      owner: causas
+      secret:
+        name: causas-secrets
+  storage:
+    size: 10Gi
+    # Longhorn (movable across nodes) is the right default at instances: 1 —
+    # unlike nexulex's 3-instance cluster, there's no CNPG-level replication
+    # here to double up under Longhorn's own block replication.
+    storageClass: nexulex-longhorn
+  monitoring:
+    enablePodMonitor: false

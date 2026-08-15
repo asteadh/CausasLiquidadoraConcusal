@@ -14,10 +14,14 @@ ENV CGO_ENABLED=0
 RUN --mount=type=cache,target=/root/.cache/go-build \
     GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w -buildid=" -o /bin/api ./cmd/server
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w -buildid=" -o /bin/sync_liquidador ./cmd/sync_liquidador
 
 FROM gcr.io/distroless/static-debian12:nonroot AS runner
 WORKDIR /app
 COPY --from=builder /bin/api /app/api
+COPY --from=builder /bin/sync_liquidador /app/sync_liquidador
 
 EXPOSE 4000
 ENTRYPOINT ["/app/api"]

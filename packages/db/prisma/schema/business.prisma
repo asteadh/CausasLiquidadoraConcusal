@@ -1,0 +1,82 @@
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  name         String
+  role         AdminRole @default(STAFF)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignments  CaseAssignment[]
+  notes        Note[]
+}
+
+enum AdminRole {
+  OWNER
+  STAFF
+}
+
+model LiquidadorCausaMirror {
+  id                 String    @id @default(cuid())
+  externalId         String    @unique
+  documentId         String
+  rol                String?
+  nombre             String?
+  estado             String?
+  deudorRut          String?
+  tribunal           String?
+  liquidador         String?
+  tipoProcedimiento  String?
+  ultimaGestion      String?
+  fechaUltimaGestion DateTime?
+  cantidadGestiones  Int?
+  fecha              DateTime?
+  raw                Json?
+  lastSyncedAt       DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  assignment         CaseAssignment?
+  notes              Note[]
+
+  @@index([estado])
+  @@index([deudorRut])
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  name        String
+  rut         String?  @unique
+  email       String?
+  phone       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments CaseAssignment[]
+}
+
+model CaseAssignment {
+  id            String    @id @default(cuid())
+  causa         LiquidadorCausaMirror @relation(fields: [causaId], references: [id], onDelete: Cascade)
+  causaId       String    @unique
+  client        Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId      String?
+  responsible   AdminUser? @relation(fields: [responsibleId], references: [id], onDelete: SetNull)
+  responsibleId String?
+  localStatus   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  causa     LiquidadorCausaMirror @relation(fields: [causaId], references: [id], onDelete: Cascade)
+  causaId   String
+  author    AdminUser @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([causaId, createdAt])
+}

@@ -1,0 +1,38 @@
+{
+  "name": "causas-liquidadora-concusal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev --concurrency=20",
+    "clean": "turbo clean",
+    "lint": "turbo lint",
+    "check-types": "turbo check-types",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "start": "turbo start",
+    "db:generate": "pnpm --filter @workspace/db run db:generate",
+    "db:migrate": "pnpm --filter @workspace/db run db:migrate",
+    "db:deploy": "pnpm --filter @workspace/db run db:deploy",
+    "docker:dev": "docker compose -f docker-compose.dev.yml up -d"
+  },
+  "devDependencies": {
+    "@workspace/eslint-config": "workspace:*",
+    "@workspace/prettier-config": "workspace:*",
+    "@workspace/typescript-config": "workspace:*",
+    "@types/node": "catalog:dev",
+    "eslint": "catalog:eslint",
+    "prettier": "catalog:prettier",
+    "prettier-plugin-organize-imports": "catalog:prettier",
+    "prettier-plugin-packagejson": "catalog:prettier",
+    "prettier-plugin-tailwindcss": "catalog:prettier",
+    "turbo": "catalog:core",
+    "typescript": "catalog:dev"
+  },
+  "prettier": "@workspace/prettier-config",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  }
+}

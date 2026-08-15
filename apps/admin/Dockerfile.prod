@@ -1,0 +1,42 @@
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS build-base
+
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+ENV PNPM_HOME="/root/.local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN npm install -g pnpm@10.33.0 turbo@2.9.18 --prefer-offline
+
+FROM build-base AS builder
+WORKDIR /app
+COPY . .
+RUN turbo prune admin --docker
+
+FROM build-base AS installer
+WORKDIR /app
+COPY --from=builder /app/out/json/ .
+RUN --mount=type=cache,id=pnpm-admin,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --ignore-scripts
+COPY --from=builder /app/out/full/ .
+
+ARG ADMIN_PUBLIC_URL=https://admin.example.com
+ENV BETTER_AUTH_URL=$ADMIN_PUBLIC_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+# Build through Turbo so @workspace/db is compiled before Next resolves its
+# package exports.
+RUN DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder \
+    BETTER_AUTH_SECRET=build-placeholder-secret-with-more-than-32-characters \
+    NEXT_PUBLIC_API_URL=http://localhost:4000 \
+    pnpm turbo build --filter=admin
+
+FROM node:22-bookworm-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+USER 1001:1001
+COPY --from=installer --chown=nextjs:nodejs /app/apps/admin/.next/standalone ./
+COPY --from=installer --chown=nextjs:nodejs /app/apps/admin/.next/static ./apps/admin/.next/static
+EXPOSE 3001
+CMD ["node", "apps/admin/server.js"]

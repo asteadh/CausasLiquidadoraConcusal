@@ -1,0 +1,48 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "globalEnv": [
+    "DATABASE_URL",
+    "BETTER_AUTH_SECRET",
+    "BETTER_AUTH_URL",
+    "NEXULEX_API_BASE_URL",
+    "NEXULEX_DEVELOPER_API_KEY",
+    "PORT",
+    "NEXT_PUBLIC_API_URL",
+    "NODE_ENV"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["db:generate", "^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", "generated/**/*"],
+      "env": ["DATABASE_URL"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "check-types": {
+      "dependsOn": ["db:generate", "^check-types"]
+    },
+    "clean": {
+      "cache": false
+    },
+    "db:deploy": {
+      "cache": false
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:migrate": {
+      "cache": false,
+      "persistent": true
+    },
+    "dev": {
+      "dependsOn": ["^db:generate"],
+      "cache": false,
+      "persistent": true
+    },
+    "start": {
+      "cache": false
+    }
+  }
+}

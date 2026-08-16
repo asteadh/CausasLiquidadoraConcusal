@@ -2,7 +2,7 @@ import { prisma } from "@workspace/db";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 
-// Minimal Better Auth setup: email+password only. Nexulex's own
+// Minimal Better Auth setup: password plus the optional Google provider. Nexulex's own
 // packages/auth/src/server.ts additionally wires passkeys, two-factor auth,
 // social account linking and a canonical-superadmin bootstrap — none of
 // which this single-tenant admin panel needs, so this stays intentionally
@@ -14,4 +14,13 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  socialProviders:
+    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? {
+          google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          },
+        }
+      : {},
 });

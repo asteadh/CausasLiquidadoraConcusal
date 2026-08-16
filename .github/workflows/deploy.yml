@@ -142,9 +142,9 @@ jobs:
       - name: 🔗 Connect to Tailscale
         uses: tailscale/github-action@v2
         with:
-          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-          tags: tag:ci
+          # Short-lived, reusable, ephemeral key pre-tagged as tag:ci.
+          # OAuth credentials remain configured for a future migration.
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
 
       - name: 📥 Install Kubectl
         run: |

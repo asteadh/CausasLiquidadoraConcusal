@@ -53,7 +53,9 @@ spec:
       containers:
         - name: admin
           image: ghcr.io/asteadh/causas-admin:latest
-          imagePullPolicy: IfNotPresent
+          # This deployment is updated through the mutable :latest tag in CI.
+          # Always pull on rollout so a node cannot retain an older admin UI.
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 3001

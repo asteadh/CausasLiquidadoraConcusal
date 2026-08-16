@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { signIn } from "@/lib/auth-client";
-import { ArrowRight, KeyRound, LockKeyhole, Mail } from "lucide-react";
+import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
+import { CausasLogo, GoogleMark } from "@/components/brand";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -52,9 +53,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-100 px-4 py-10">
       <Card className="w-full max-w-md border-slate-200/80 bg-white/95 shadow-xl backdrop-blur">
         <CardHeader className="space-y-3 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg">
-            <KeyRound className="size-6" />
-          </div>
+          <div className="mx-auto"><CausasLogo /></div>
           <div>
             <CardTitle className="text-2xl">Bienvenido</CardTitle>
             <CardDescription className="mt-2">Accede al panel de causas de liquidación concursal.</CardDescription>
@@ -88,7 +87,7 @@ export default function LoginPage() {
           </form>
           <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground"><div className="h-px flex-1 bg-border" />o continúa con<div className="h-px flex-1 bg-border" /></div>
           <Button type="button" variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={loading || googleLoading}>
-            {googleLoading ? "Redirigiendo a Google..." : "Continuar con Google"}
+            {googleLoading ? "Redirigiendo a Google..." : <><GoogleMark />Continuar con Google</>}
           </Button>
         </CardContent>
       </Card>

@@ -77,7 +77,7 @@ cf_request() {
 reconcile_cname() {
   local hostname="$1"
   local target="${CLOUDFLARE_TUNNEL_ID}.cfargotunnel.com"
-  local encoded_hostname record_id body
+  local encoded_hostname record_id body record
   encoded_hostname="$(jq -rn --arg value "$hostname" '$value | @uri')"
   record_id="$(cf_request GET "${API_BASE}/zones/${CLOUDFLARE_ZONE_ID}/dns_records?type=CNAME&name=${encoded_hostname}" | jq -r '.result[0].id // empty')"
   body="$(jq -cn --arg name "$hostname" --arg content "$target" \
@@ -86,9 +86,19 @@ reconcile_cname() {
     cf_request PATCH "${API_BASE}/zones/${CLOUDFLARE_ZONE_ID}/dns_records/${record_id}" "$body" >/dev/null
     echo "Updated DNS route: ${hostname} -> ${target}"
   else
-    cf_request POST "${API_BASE}/zones/${CLOUDFLARE_ZONE_ID}/dns_records" "$body" >/dev/null
+    record="$(cf_request POST "${API_BASE}/zones/${CLOUDFLARE_ZONE_ID}/dns_records" "$body")"
+    record_id="$(jq -r '.result.id // empty' <<<"$record")"
     echo "Created DNS route: ${hostname} -> ${target}"
   fi
+
+  # A Tunnel hostname must be proxied. A gray-cloud CNAME resolves to the
+  # tunnel's private target and is unreachable from the public Internet.
+  record="$(cf_request GET "${API_BASE}/zones/${CLOUDFLARE_ZONE_ID}/dns_records/${record_id}")"
+  if [ "$(jq -r '.result.proxied // false' <<<"$record")" != "true" ]; then
+    echo "Cloudflare left ${hostname} DNS-only; it must be proxied for the Tunnel to be public." >&2
+    exit 1
+  fi
+  echo "Verified proxied DNS route: ${hostname}"
 }
 
 required_env CLOUDFLARE_TUNNEL_API_TOKEN

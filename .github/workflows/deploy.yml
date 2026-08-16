@@ -30,7 +30,7 @@ jobs:
             image: causas-admin
             cache: admin
             build-args: |
-              ADMIN_PUBLIC_URL=https://causas.liquidadoraconcusal.cl
+              ADMIN_PUBLIC_URL=https://causas.liquidadoraconcursal.cl
               NEXT_PUBLIC_API_URL=http://api.causas.svc.cluster.local:4000
           - name: Migrator
             dockerfile: packages/db/Dockerfile.migrate

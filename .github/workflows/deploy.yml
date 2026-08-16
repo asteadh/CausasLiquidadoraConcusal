@@ -140,11 +140,11 @@ jobs:
           echo "::endgroup::"
 
       - name: 🔗 Connect to Tailscale
-        uses: tailscale/github-action@v2
+        uses: tailscale/github-action@v4
         with:
-          # Short-lived, reusable, ephemeral key pre-tagged as tag:ci.
-          # OAuth credentials remain configured for a future migration.
-          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: tag:ci
 
       - name: 📥 Install Kubectl
         run: |

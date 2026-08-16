@@ -7,6 +7,9 @@ WORKDIR /app
 COPY packages/db/prisma ./prisma
 COPY packages/db/prisma.config.ts ./prisma.config.ts
 
+# Base image's bundled npm vendors an older tar with a known CVE.
+RUN npm install -g npm@latest
+
 RUN npm init -y >/dev/null && \
     npm install --no-save --no-audit --no-fund --loglevel=error \
         prisma@7.8.0 \

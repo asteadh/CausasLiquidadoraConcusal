@@ -41,6 +41,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3001
 ENV NEXT_TELEMETRY_DISABLED=1
+# Base image's bundled npm vendors an older tar with a known CVE; the
+# runtime here never invokes npm, but Trivy still scans it off disk.
+RUN npm install -g npm@latest
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 USER 1001:1001
 COPY --from=installer --chown=nextjs:nodejs /app/apps/admin/.next/standalone ./

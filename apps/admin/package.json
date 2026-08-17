@@ -13,13 +13,18 @@
   },
   "prettier": "@workspace/prettier-config",
   "dependencies": {
+    "@radix-ui/react-dialog": "catalog:web",
+    "@radix-ui/react-dropdown-menu": "catalog:web",
+    "@radix-ui/react-separator": "catalog:web",
     "@radix-ui/react-slot": "catalog:web",
+    "@radix-ui/react-tooltip": "catalog:web",
     "@workspace/db": "workspace:*",
     "better-auth": "catalog:core",
     "class-variance-authority": "catalog:web",
     "clsx": "catalog:web",
     "lucide-react": "catalog:web",
     "next": "catalog:web",
+    "next-themes": "catalog:web",
     "react": "catalog:core",
     "react-dom": "catalog:core",
     "tailwind-merge": "catalog:web"

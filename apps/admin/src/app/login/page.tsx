@@ -1,5 +1,6 @@
 "use client";
 
+import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,9 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
+          <div className="mb-2 flex justify-center">
+            <Logo variant="auth-form" />
+          </div>
           <CardTitle>Iniciar sesión</CardTitle>
           <CardDescription>Panel de causas de liquidación concursal</CardDescription>
         </CardHeader>

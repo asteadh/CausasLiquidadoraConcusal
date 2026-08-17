@@ -1,20 +1,22 @@
-// Standard Better Auth Prisma adapter schema (email + password only — no
-// OAuth, no passkeys, no two-factor). Column names match Better Auth's
-// defaults exactly so `prismaAdapter(prisma, { provider: "postgresql" })`
-// works with zero field/model mapping, and so the Go API's
+// Standard Better Auth Prisma adapter schema (email + password, optional
+// Google OAuth, account deletion, and two-factor auth). Column names match
+// Better Auth's defaults exactly so `prismaAdapter(prisma, { provider:
+// "postgresql" })` works with zero field/model mapping, and so the Go API's
 // middleware_auth.go can validate sessions with a plain, unqualified SQL
 // query against "Session" / "User".
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  name          String
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  email           String    @unique
+  emailVerified   Boolean   @default(false)
+  name            String
+  image           String?
+  twoFactorEnabled Boolean  @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   sessions      Session[]
   accounts      Account[]
+  twoFactors    TwoFactor[]
 }
 
 model Session {
@@ -46,6 +48,16 @@ model Account {
   updatedAt             DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TwoFactor {
+  id          String  @id @default(cuid())
+  secret      String
+  backupCodes String
+  verified    Boolean @default(true)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Verification {

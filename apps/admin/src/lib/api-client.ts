@@ -33,7 +33,10 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
     return null as T;
   }
 
-  return (await res.json()) as T;
+  // Tolerate an empty body on any other 2xx too — res.json() would throw
+  // "Unexpected end of JSON input" and take down the whole Server Component.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : null) as T;
 }
 
 export const apiClient = {

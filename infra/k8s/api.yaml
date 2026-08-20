@@ -53,7 +53,10 @@ spec:
       containers:
         - name: api
           image: ghcr.io/asteadh/causas-api:latest
-          imagePullPolicy: IfNotPresent
+          # The tag is mutable, so IfNotPresent makes a rollout restart reuse the
+          # stale layer already cached on the node and silently keep serving the
+          # previous build (same reason admin.yaml uses Always).
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 4000

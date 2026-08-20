@@ -35,7 +35,9 @@ spec:
           containers:
             - name: sync-liquidador
               image: ghcr.io/asteadh/causas-api:latest
-              imagePullPolicy: IfNotPresent
+              # Mutable tag: IfNotPresent would pin this CronJob to whatever
+              # :latest happened to be cached on the node it lands on.
+              imagePullPolicy: Always
               # distroless/static has no shell, so this must be an exec array,
               # not a "sh -c" string — see apps/api/Dockerfile.prod.
               command: ["/app/sync_liquidador"]

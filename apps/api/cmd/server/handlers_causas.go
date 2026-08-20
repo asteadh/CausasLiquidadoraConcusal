@@ -62,7 +62,7 @@ func (s *server) handleListCausas(w http.ResponseWriter, r *http.Request) {
 
 	query := `SELECT` + causaSelectColumns + ` FROM "LiquidadorCausaMirror" WHERE ($1 = '' OR "estado" = $1) AND (
 		$2 = '' OR "rol" ILIKE '%' || $2 || '%' OR "nombre" ILIKE '%' || $2 || '%' OR "deudorRut" ILIKE '%' || $2 || '%'
-	) ORDER BY "updatedAt" DESC LIMIT $3 OFFSET $4`
+	) ORDER BY "updatedAt" DESC, "externalId" ASC LIMIT $3 OFFSET $4`
 
 	rows, err := s.db.Query(ctx, query, estado, q, pageSize, offset)
 	if err != nil {

@@ -54,11 +54,11 @@ func upsertCausa(ctx context.Context, pool *pgxpool.Pool, causa Causa) error {
 	return err
 }
 
-func nullableTime(t *time.Time) any {
-	if t == nil {
+func nullableTime(t *apiTime) any {
+	if t == nil || t.IsZero() {
 		return nil
 	}
-	return *t
+	return t.Time
 }
 
 // newID generates a random hex identifier for rows inserted via raw SQL

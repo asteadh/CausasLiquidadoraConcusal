@@ -24,9 +24,10 @@ func newID() string {
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	if payload == nil {
-		return
-	}
+	// A nil payload is encoded as JSON null rather than skipped: the header
+	// already promises JSON, and a zero-length 200 makes every client that
+	// calls res.json() throw (handleGetAssignment returns nil for a causa
+	// with no assignment). Use 204 when the response truly has no body.
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		log.Printf("json encode failed: %v", err)
 	}

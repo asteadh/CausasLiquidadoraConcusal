@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+// defaultPageSize is also the server-side maximum: the endpoint silently
+// clamps perPage to 100.
 const defaultPageSize = 100
 
 // Client calls nexulex's developer API to read liquidaciones case data.
@@ -40,9 +42,11 @@ func (c *Client) FetchPage(ctx context.Context, page, pageSize int) ([]Causa, bo
 	}
 
 	endpoint := c.BaseURL + "/api/developer-data/liquidaciones/causas"
+	// The page-size parameter is "perPage"; anything else (pageSize, limit) is
+	// ignored and the endpoint falls back to its own default of 50.
 	query := url.Values{
-		"page":     []string{strconv.Itoa(page)},
-		"pageSize": []string{strconv.Itoa(pageSize)},
+		"page":    []string{strconv.Itoa(page)},
+		"perPage": []string{strconv.Itoa(pageSize)},
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+query.Encode(), nil)
@@ -72,7 +76,19 @@ func (c *Client) FetchPage(ctx context.Context, page, pageSize int) ([]Causa, bo
 		return nil, false, fmt.Errorf("decode response: %w", err)
 	}
 
-	return page_.Data, page_.HasMore, nil
+	// Second pass over the same body to keep each causa's untouched JSON for
+	// the mirror's "raw" column (see Causa.Raw).
+	var rawPage struct {
+		Causas []json.RawMessage `json:"causas"`
+	}
+	if err := json.Unmarshal(body, &rawPage); err == nil && len(rawPage.Causas) == len(page_.Causas) {
+		for i := range page_.Causas {
+			page_.Causas[i].Raw = rawPage.Causas[i]
+		}
+	}
+
+	hasMore := page_.PageCount > 0 && page_.Page < page_.PageCount
+	return page_.Causas, hasMore, nil
 }
 
 // FetchAll pages through every causa available to this API key.
